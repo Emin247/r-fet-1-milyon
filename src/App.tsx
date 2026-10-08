@@ -10,6 +10,11 @@ import {
   ChevronRight,
   Hash,
   Sparkles,
+  Image as ImageIcon,
+  Share2,
+  X,
+  Check,
+  Smartphone,
 } from 'lucide-react';
 
 const COLUMN_HEADERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
@@ -338,6 +343,10 @@ export default function App() {
 
   const [isManualInputActive, setIsManualInputActive] = useState<boolean>(false);
   const [comboInput, setComboInput] = useState<string>('1');
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [showImageModal, setShowImageModal] = useState<boolean>(false);
+  const [isGeneratingImage, setIsGeneratingImage] = useState<boolean>(false);
+  const [imageNotification, setImageNotification] = useState<string | null>(null);
 
   const applyCombination = (num: number) => {
     if (isNaN(num) || num < 1 || num > 1024) return;
@@ -506,6 +515,357 @@ export default function App() {
           : tbl
       );
     });
+  };
+
+  const drawRoundRectHelper = (
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    r: number
+  ) => {
+    if (typeof (ctx as any).roundRect === 'function') {
+      (ctx as any).roundRect(x, y, w, h, r);
+    } else {
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+    }
+  };
+
+  const generateTable7ImageBlob = (): Promise<{ blob: Blob; dataUrl: string }> => {
+    return new Promise((resolve, reject) => {
+      const table5 = tables.find((t) => t.id === 5);
+      const table5Data = table5?.data || [];
+      const table7 = tables.find((t) => t.id === 7);
+      const table7Data = table7?.data || TABLE_7_DATA;
+
+      const scale = 2; // High-DPI 2x Retina
+      const cardWidth = 1140;
+      const padding = 28;
+      const bannerHeight = 84;
+      const tableHeaderHeight = 44;
+      const rowHeight = 64;
+      const rowsCount = 4;
+      const tableBodyHeight = rowsCount * rowHeight;
+      const footerHeight = 52;
+      const cardHeight = bannerHeight + tableHeaderHeight + tableBodyHeight + footerHeight;
+
+      const totalWidth = cardWidth + padding * 2;
+      const totalHeight = cardHeight + padding * 2;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = totalWidth * scale;
+      canvas.height = totalHeight * scale;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Canvas context could not be created'));
+        return;
+      }
+
+      ctx.scale(scale, scale);
+
+      // Background
+      ctx.fillStyle = '#f1f5f9';
+      ctx.fillRect(0, 0, totalWidth, totalHeight);
+
+      // Card
+      const cardX = padding;
+      const cardY = padding;
+      const radius = 16;
+
+      ctx.save();
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.08)';
+      ctx.shadowBlur = 24;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 8;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      drawRoundRectHelper(ctx, cardX, cardY, cardWidth, cardHeight, radius);
+      ctx.fill();
+      ctx.restore();
+
+      // Clip inside card
+      ctx.save();
+      ctx.beginPath();
+      drawRoundRectHelper(ctx, cardX, cardY, cardWidth, cardHeight, radius);
+      ctx.clip();
+
+      // Top Banner
+      ctx.fillStyle = '#107c41';
+      ctx.fillRect(cardX, cardY, cardWidth, bannerHeight);
+
+      ctx.fillStyle = '#0d6535';
+      ctx.fillRect(cardX, cardY, cardWidth, 4);
+
+      // Banner text
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 24px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillText('CƏDVƏL 7', cardX + 24, cardY + 38);
+
+      ctx.fillStyle = '#d1fae5';
+      ctx.font = '500 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillText(
+        '5-ci cədvələ uyğun (Hər sütunda 2 xana Yaşıl) • Şablon: 1 2 / 1 3 / 2 4 / 3 4',
+        cardX + 24,
+        cardY + 63
+      );
+
+      // Combination Badge on banner
+      const badgeText = comboInput ? `Kombinasiya #${comboInput} / 1024` : '10 Sütun';
+      ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      const badgeMetrics = ctx.measureText(badgeText);
+      const badgeW = badgeMetrics.width + 24;
+      const badgeH = 32;
+      const badgeX = cardX + cardWidth - badgeW - 24;
+      const badgeY = cardY + (bannerHeight - badgeH) / 2;
+
+      ctx.fillStyle = '#0d6535';
+      ctx.beginPath();
+      drawRoundRectHelper(ctx, badgeX, badgeY, badgeW, badgeH, 16);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(badgeText, badgeX + 12, badgeY + 21);
+
+      // Table layout
+      const tableX = cardX;
+      const tableY = cardY + bannerHeight;
+      const rowHeaderColWidth = 140;
+      const dataColWidth = (cardWidth - rowHeaderColWidth) / 10;
+
+      // Table header row
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(tableX, tableY, cardWidth, tableHeaderHeight);
+
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fillRect(tableX, tableY + tableHeaderHeight - 1, cardWidth, 1);
+
+      // Sətir \\ Sütun header
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#475569';
+      ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillText('Sətir \\ Sütun', tableX + rowHeaderColWidth / 2, tableY + 27);
+
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fillRect(tableX + rowHeaderColWidth, tableY, 1, tableHeaderHeight + tableBodyHeight);
+
+      // Column headers A-J
+      for (let col = 0; col < 10; col++) {
+        const colX = tableX + rowHeaderColWidth + col * dataColWidth;
+        ctx.fillStyle = '#334155';
+        ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillText(`Sütun ${COLUMN_HEADERS[col]}`, colX + dataColWidth / 2, tableY + 27);
+
+        if (col > 0) {
+          ctx.fillStyle = '#e2e8f0';
+          ctx.fillRect(colX, tableY, 1, tableHeaderHeight + tableBodyHeight);
+        }
+      }
+
+      // 4 Data Rows
+      const table5Row0 = table5Data[0] || [];
+
+      for (let rIdx = 0; rIdx < 4; rIdx++) {
+        const currentY = tableY + tableHeaderHeight + rIdx * rowHeight;
+
+        // Row Header
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(tableX, currentY, rowHeaderColWidth, rowHeight);
+
+        ctx.fillStyle = '#475569';
+        ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`Sətir ${rIdx + 1}`, tableX + rowHeaderColWidth / 2, currentY + rowHeight / 2 + 5);
+
+        // Horizontal divider
+        ctx.fillStyle = '#e2e8f0';
+        ctx.fillRect(tableX, currentY, cardWidth, 1);
+
+        // 10 Data cells
+        for (let cIdx = 0; cIdx < 10; cIdx++) {
+          const cellX = tableX + rowHeaderColWidth + cIdx * dataColWidth;
+          const cellVal = table7Data[rIdx]?.[cIdx] || '';
+
+          const outcome = table5Row0[cIdx];
+          const isGreen =
+            Boolean(outcome) &&
+            (outcome === '1'
+              ? rIdx === 0 || rIdx === 1
+              : outcome === '2'
+              ? rIdx === 0 || rIdx === 2
+              : outcome === '3'
+              ? rIdx === 1 || rIdx === 3
+              : outcome === '4'
+              ? rIdx === 2 || rIdx === 3
+              : false);
+
+          if (isGreen) {
+            ctx.fillStyle = '#059669';
+            ctx.fillRect(cellX + 1, currentY + 1, dataColWidth - 1, rowHeight - 1);
+
+            ctx.fillStyle = '#10b981';
+            ctx.fillRect(cellX + 1, currentY + 1, dataColWidth - 1, 2);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 22px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace';
+            ctx.fillText(cellVal, cellX + dataColWidth / 2, currentY + rowHeight / 2 + 8);
+          } else {
+            ctx.fillStyle = '#f8fafc';
+            ctx.fillRect(cellX + 1, currentY + 1, dataColWidth - 1, rowHeight - 1);
+
+            ctx.fillStyle = '#64748b';
+            ctx.font = '600 18px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace';
+            ctx.fillText(cellVal, cellX + dataColWidth / 2, currentY + rowHeight / 2 + 6);
+          }
+        }
+      }
+
+      // Footer bar
+      const footerY = tableY + tableHeaderHeight + tableBodyHeight;
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(cardX, footerY, cardWidth, footerHeight);
+
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fillRect(cardX, footerY, cardWidth, 1);
+
+      // Legend
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#059669';
+      ctx.beginPath();
+      drawRoundRectHelper(ctx, cardX + 24, footerY + 17, 16, 16, 4);
+      ctx.fill();
+
+      ctx.fillStyle = '#334155';
+      ctx.font = '600 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillText('Yaşıl: 5-ci cədvələ uyğun aktiv xanalar', cardX + 48, footerY + 30);
+
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      drawRoundRectHelper(ctx, cardX + 310, footerY + 17, 16, 16, 4);
+      ctx.fill();
+
+      ctx.fillStyle = '#64748b';
+      ctx.font = '500 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillText('Boz: Standart şablon', cardX + 334, footerY + 30);
+
+      ctx.textAlign = 'right';
+      const dateStr = new Date().toLocaleDateString('az-AZ', {
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+      });
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '500 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillText(`${dateStr} • Cədvəl 7 Şəkli`, cardX + cardWidth - 24, footerY + 30);
+
+      ctx.restore();
+
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error('Canvas toBlob failed'));
+            return;
+          }
+          const dataUrl = canvas.toDataURL('image/png');
+          resolve({ blob, dataUrl });
+        },
+        'image/png',
+        1.0
+      );
+    });
+  };
+
+  const exportTable7AsImage = async () => {
+    setIsGeneratingImage(true);
+    try {
+      const { blob, dataUrl } = await generateTable7ImageBlob();
+      setImagePreviewUrl(dataUrl);
+      setShowImageModal(true);
+
+      const fileName = `cedvel_7_${Date.now()}.png`;
+      const file = new File([blob], fileName, { type: 'image/png' });
+
+      // Mobile share sheet (has "Save Image" / "Fotoşəkillərə saxla" / Gallery directly!)
+      let sharedViaNavigator = false;
+      if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: 'Cədvəl 7',
+            text: 'Cədvəl 7 Nəticəsi',
+          });
+          sharedViaNavigator = true;
+          setImageNotification('Şəkil paylaşıldı / galeriyaya saxlanıldı!');
+        } catch (shareErr: any) {
+          if (shareErr.name === 'AbortError') {
+            return;
+          }
+        }
+      }
+
+      if (!sharedViaNavigator) {
+        // Direct download fallback
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        setImageNotification('Şəkil galeriyanıza / cihazınıza yükləndi!');
+      }
+    } catch (err) {
+      console.error('Error generating image', err);
+      setImageNotification('Şəkil hazırlanarkən xəta baş verdi');
+    } finally {
+      setIsGeneratingImage(false);
+      setTimeout(() => setImageNotification(null), 4000);
+    }
+  };
+
+  const handleManualShare = async () => {
+    if (!imagePreviewUrl) return;
+    try {
+      const res = await fetch(imagePreviewUrl);
+      const blob = await res.blob();
+      const file = new File([blob], `cedvel_7_${Date.now()}.png`, { type: 'image/png' });
+      if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'Cədvəl 7',
+          text: 'Cədvəl 7 Nəticəsi',
+        });
+      } else {
+        const link = document.createElement('a');
+        link.href = imagePreviewUrl;
+        link.download = `cedvel_7_${Date.now()}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    } catch (err) {
+      console.error('Share error', err);
+    }
+  };
+
+  const handleDirectDownload = () => {
+    if (!imagePreviewUrl) return;
+    const link = document.createElement('a');
+    link.href = imagePreviewUrl;
+    link.download = `cedvel_7_${Date.now()}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const exportTableCSV = (table: TableState) => {
@@ -877,15 +1237,28 @@ export default function App() {
                         Təmizlə
                       </button>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => exportTableCSV(table)}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-neutral-700 hover:text-emerald-800 bg-white hover:bg-emerald-50 border border-neutral-300 rounded transition-colors"
-                      title="CSV formatında yüklə"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      CSV Yüklə
-                    </button>
+                    {table.id === 7 ? (
+                      <button
+                        type="button"
+                        onClick={exportTable7AsImage}
+                        disabled={isGeneratingImage}
+                        className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 border border-emerald-700 rounded shadow-xs transition-all hover:scale-[1.02]"
+                        title="Şəkil kimi telefonun galeriyasına yüklə"
+                      >
+                        <ImageIcon className="w-3.5 h-3.5" />
+                        {isGeneratingImage ? 'Hazırlanır...' : 'Şəkil Yüklə'}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => exportTableCSV(table)}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-neutral-700 hover:text-emerald-800 bg-white hover:bg-emerald-50 border border-neutral-300 rounded transition-colors"
+                        title="CSV formatında yüklə"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        CSV Yüklə
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -1251,6 +1624,98 @@ export default function App() {
           })}
         </div>
       </main>
+
+      {/* Image Preview & Save Modal for Table 7 */}
+      {showImageModal && imagePreviewUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-neutral-200">
+            {/* Modal Header */}
+            <div className="px-4 sm:px-6 py-3.5 bg-[#107c41] text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 bg-white/10 rounded-lg">
+                  <ImageIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm sm:text-base leading-tight">Cədvəl 7 — Şəkil Hazırlandı</h3>
+                  <p className="text-[11px] text-emerald-100">Telefonun galeriyasına saxlamaq üçün hazırdır</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowImageModal(false)}
+                className="p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                title="Bağla"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-4 text-neutral-800">
+              {/* Mobile tip */}
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 sm:p-3.5 flex items-start gap-3 text-xs text-emerald-950">
+                <Smartphone className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold">Telefonda birbaşa Galeriyaya saxlamaq üçün:</span>
+                  <p className="text-emerald-800 mt-0.5">
+                    Aşağıdakı <strong>«Galeriyaya Saxla / Paylaş»</strong> düyməsini basıb açılan menyuda <strong>«Save Image / Şəkli Saxla»</strong> seçin, yaxud şəklin üzərinə <strong>1-2 saniyə basıb saxlayaraq</strong> telefonunuzun galeriyasına əlavə edin.
+                  </p>
+                </div>
+              </div>
+
+              {/* Image Preview */}
+              <div className="bg-neutral-100 rounded-xl p-2 border border-neutral-200 flex items-center justify-center overflow-hidden">
+                <img
+                  src={imagePreviewUrl}
+                  alt="Cədvəl 7"
+                  className="w-full h-auto rounded-lg shadow-sm max-h-[50vh] object-contain select-all cursor-pointer"
+                  title="Telefonda basıb saxlayaraq birbaşa galeriyaya saxlaya bilərsiniz"
+                />
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-4 sm:px-6 py-3.5 bg-neutral-50 border-t border-neutral-200 flex flex-wrap items-center justify-between gap-2.5">
+              <span className="text-[11px] text-neutral-500">
+                Format: <strong>PNG (Yüksək keyfiyyət)</strong>
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleManualShare}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 rounded-lg transition-all shadow-xs"
+                >
+                  <Share2 className="w-4 h-4" />
+                  Galeriyaya Saxla / Paylaş
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDirectDownload}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-neutral-700 hover:text-neutral-900 bg-white hover:bg-neutral-100 border border-neutral-300 rounded-lg transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  Yüklə (PNG)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowImageModal(false)}
+                  className="px-3 py-2 text-xs font-medium text-neutral-500 hover:text-neutral-800 rounded-lg transition-colors"
+                >
+                  Bağla
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating notification toast if any */}
+      {imageNotification && (
+        <div className="fixed bottom-6 right-6 z-50 bg-neutral-900/90 text-white px-4 py-2.5 rounded-xl shadow-lg border border-neutral-700 flex items-center gap-2 text-xs animate-in slide-in-from-bottom duration-200">
+          <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{imageNotification}</span>
+        </div>
+      )}
     </div>
   );
 }
