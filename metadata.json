@@ -1,0 +1,6 @@
+{
+  "name": "Excel Cədvəlləri",
+  "description": "7 ədəd Excel tipli cədvəl və avtomatik hesablanma sistemi",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
