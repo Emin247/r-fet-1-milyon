@@ -889,17 +889,17 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f3f4f6] text-neutral-800 antialiased font-sans pb-16">
+    <div className="min-h-screen bg-[#f3f4f6] text-neutral-800 antialiased font-sans pb-16 overflow-x-hidden w-full">
       {/* Top Header bar styled like Excel */}
-      <header className="bg-[#107c41] text-white px-6 py-4 shadow-sm border-b border-[#0d6535]">
+      <header className="bg-[#107c41] text-white px-3 sm:px-6 py-3 sm:py-4 shadow-sm border-b border-[#0d6535]">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-white/10 rounded-md backdrop-blur-xs">
-              <Table className="w-6 h-6 text-white" />
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="p-1.5 sm:p-2 bg-white/10 rounded-md backdrop-blur-xs shrink-0">
+              <Table className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
-            <div>
-              <h1 className="text-xl font-bold tracking-tight">Excel Cədvəlləri</h1>
-              <p className="text-xs text-emerald-100 font-medium">
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl font-bold tracking-tight truncate">Excel Cədvəlləri</h1>
+              <p className="text-[11px] sm:text-xs text-emerald-100 font-medium truncate">
                 Toplam 7 Ədəd Cədvəl | 10 Sütun | Avtomatik Hesablanma Sistemi
               </p>
             </div>
@@ -1098,7 +1098,7 @@ export default function App() {
       </div>
 
       {/* Main Content Area */}
-      <main className="w-full max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 pt-4 sm:pt-6">
+      <main className="w-full max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 pt-4 sm:pt-6 overflow-x-hidden min-w-0">
 
         <div className="space-y-8 sm:space-y-10">
           {tables.map((table) => {
@@ -1117,22 +1117,22 @@ export default function App() {
             return (
               <section
                 key={table.id}
-                className="bg-white rounded-lg shadow-sm border border-neutral-300 overflow-hidden"
+                className="w-full max-w-full min-w-0 bg-white rounded-lg shadow-sm border border-neutral-300 overflow-hidden"
               >
                 {/* Table Header Bar */}
-                <div className="bg-neutral-50 px-3 sm:px-4 py-2.5 sm:py-3 border-b border-neutral-200 flex flex-wrap items-center justify-between gap-2 sm:gap-3">
-                  <div className="flex items-center gap-3">
-                    <span className="font-semibold text-neutral-800 text-base tracking-wide flex items-center gap-2">
-                      <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#107c41]"></span>
+                <div className="w-full max-w-full bg-neutral-50 px-2.5 sm:px-4 py-2 sm:py-3 border-b border-neutral-200 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
+                    <span className="font-semibold text-neutral-800 text-sm sm:text-base tracking-wide flex items-center gap-1.5 sm:gap-2 shrink-0">
+                      <span className="inline-block w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full bg-[#107c41]"></span>
                       {table.title}
                     </span>
-                    <span className="text-xs text-neutral-500 font-normal">
+                    <span className="text-[11px] sm:text-xs text-neutral-500 font-normal truncate">
                       ({table.data.length} Sətir × 10 Sütun)
                     </span>
                   </div>
 
                   {/* Table Control Buttons */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                     {table.id === 1 && (
                       <>
                         <div className="hidden md:flex items-center gap-2 mr-1">
@@ -1242,35 +1242,35 @@ export default function App() {
                         type="button"
                         onClick={exportTable7AsImage}
                         disabled={isGeneratingImage}
-                        className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 border border-emerald-700 rounded shadow-xs transition-all hover:scale-[1.02]"
+                        className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 border border-emerald-700 rounded-md sm:rounded shadow-xs transition-all shrink-0 hover:scale-[1.02]"
                         title="Şəkil kimi telefonun galeriyasına yüklə"
                       >
-                        <ImageIcon className="w-3.5 h-3.5" />
-                        {isGeneratingImage ? 'Hazırlanır...' : 'Şəkil Yüklə'}
+                        <ImageIcon className="w-3.5 h-3.5 shrink-0" />
+                        <span>{isGeneratingImage ? 'Hazırlanır...' : 'Şəkil Yüklə'}</span>
                       </button>
                     ) : (
                       <button
                         type="button"
                         onClick={() => exportTableCSV(table)}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-neutral-700 hover:text-emerald-800 bg-white hover:bg-emerald-50 border border-neutral-300 rounded transition-colors"
+                        className="inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 text-xs font-medium text-neutral-700 hover:text-emerald-800 bg-white hover:bg-emerald-50 border border-neutral-300 rounded transition-colors shrink-0"
                         title="CSV formatında yüklə"
                       >
-                        <Download className="w-3.5 h-3.5" />
-                        CSV Yüklə
+                        <Download className="w-3.5 h-3.5 shrink-0" />
+                        <span>CSV Yüklə</span>
                       </button>
                     )}
                   </div>
                 </div>
 
                 {/* Formula / Cell Bar */}
-                <div className="bg-neutral-100 border-b border-neutral-200 px-4 py-2 flex items-center gap-2 text-xs">
-                  <div className="flex items-center justify-center font-mono font-bold bg-white text-neutral-700 border border-neutral-300 rounded px-2.5 py-1 min-w-[54px] text-center shadow-2xs">
+                <div className="bg-neutral-100 border-b border-neutral-200 px-2.5 sm:px-4 py-1.5 sm:py-2 flex items-center gap-1.5 sm:gap-2 text-xs overflow-hidden">
+                  <div className="flex items-center justify-center font-mono font-bold bg-white text-neutral-700 border border-neutral-300 rounded px-2 sm:px-2.5 py-0.5 sm:py-1 min-w-[46px] sm:min-w-[54px] text-center shadow-2xs text-[11px] sm:text-xs shrink-0">
                     {activeCellName || '--'}
                   </div>
-                  <div className="text-neutral-400 font-serif italic text-sm select-none px-1">
+                  <div className="text-neutral-400 font-serif italic text-xs sm:text-sm select-none px-0.5 sm:px-1 shrink-0">
                     fx
                   </div>
-                  <div className="h-4 w-px bg-neutral-300 mx-1"></div>
+                  <div className="h-4 w-px bg-neutral-300 mx-0.5 sm:mx-1 shrink-0"></div>
                   <input
                     type="text"
                     disabled={
@@ -1313,10 +1313,10 @@ export default function App() {
                         : table.id === 6
                         ? 'Dəyişilməz şablon xanası (1-4)'
                         : table.id === 7
-                        ? 'Dəyişilməz şablon xanası (1 və 2 / 1 və 3 / 2 və 4 / 3 və 4)'
+                        ? 'Dəyişilməz şablon xanası (1 2 / 1 3 / 2 4 / 3 4)'
                         : 'Seçilmiş xananın dəyəri...'
                     }
-                    className="flex-1 bg-white border border-neutral-300 rounded px-3 py-1 text-neutral-800 text-xs focus:outline-hidden focus:border-[#107c41] focus:ring-1 focus:ring-[#107c41] disabled:bg-neutral-100 disabled:text-neutral-400"
+                    className="flex-1 min-w-0 bg-white border border-neutral-300 rounded px-2 sm:px-3 py-1 text-neutral-800 text-[11px] sm:text-xs focus:outline-hidden focus:border-[#107c41] focus:ring-1 focus:ring-[#107c41] disabled:bg-neutral-100 disabled:text-neutral-400"
                   />
                 </div>
 
@@ -1571,7 +1571,7 @@ export default function App() {
                                       handleKeyDown(e, table.id, rowIdx, colIdx)
                                     }
                                     placeholder={placeholderText}
-                                    className={`w-full h-8 sm:h-9 md:h-10 px-0.5 sm:px-1 text-center text-[10px] sm:text-xs md:text-sm font-semibold truncate outline-hidden focus:placeholder:text-transparent ${finalInputClass}`}
+                                    className={`w-full min-w-0 h-8 sm:h-9 md:h-10 px-0.5 sm:px-1 text-center text-[10px] sm:text-xs md:text-sm font-semibold truncate outline-hidden focus:placeholder:text-transparent ${finalInputClass}`}
                                   />
                                   {isSelected && (
                                     <div
@@ -1619,6 +1619,25 @@ export default function App() {
                     )}
                   </div>
                 </div>
+
+                {/* Dedicated Mobile Action Bar for Table 7 */}
+                {table.id === 7 && (
+                  <div className="sm:hidden px-3 py-2 bg-emerald-50/80 border-t border-emerald-200/80 flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-semibold text-emerald-950 flex items-center gap-1.5">
+                      <Smartphone className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      Cədvəl 7 Nəticəsi
+                    </span>
+                    <button
+                      type="button"
+                      onClick={exportTable7AsImage}
+                      disabled={isGeneratingImage}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 rounded-md shadow-xs transition-all shrink-0"
+                    >
+                      <ImageIcon className="w-3.5 h-3.5 shrink-0" />
+                      <span>{isGeneratingImage ? 'Hazırlanır...' : 'Şəkil Yüklə'}</span>
+                    </button>
+                  </div>
+                )}
               </section>
             );
           })}
