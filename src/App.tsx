@@ -1,4 +1,6 @@
 import React, { useState, useRef } from 'react';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 import {
   Table,
   Download,
@@ -15,6 +17,8 @@ import {
   X,
   Check,
   Smartphone,
+  Archive,
+  Loader2,
 } from 'lucide-react';
 
 const COLUMN_HEADERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
@@ -348,6 +352,16 @@ export default function App() {
   const [isGeneratingImage, setIsGeneratingImage] = useState<boolean>(false);
   const [imageNotification, setImageNotification] = useState<string | null>(null);
 
+  // 1024 ədəd Cədvəl 7 şəkillərinin toplu generasiyası və yüklənməsi üçün vəziyyət (State)
+  const [isBatchGenerating, setIsBatchGenerating] = useState<boolean>(false);
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number; percent: number }>({
+    current: 0,
+    total: 1024,
+    percent: 0,
+  });
+  const [showBatchModal, setShowBatchModal] = useState<boolean>(false);
+  const cancelBatchRef = useRef<boolean>(false);
+
   const applyCombination = (num: number) => {
     if (isNaN(num) || num < 1 || num > 1024) return;
     const clamped = Math.max(1, Math.min(1024, Math.floor(num)));
@@ -540,10 +554,13 @@ export default function App() {
     }
   };
 
-  const generateTable7ImageBlob = (): Promise<{ blob: Blob; dataUrl: string }> => {
+  const generateTable7ImageBlob = (
+    overrideComboNum?: number,
+    overrideTable5Data?: string[][]
+  ): Promise<{ blob: Blob; dataUrl: string }> => {
     return new Promise((resolve, reject) => {
       const table5 = tables.find((t) => t.id === 5);
-      const table5Data = table5?.data || [];
+      const table5Data = overrideTable5Data || table5?.data || [];
       const table7 = tables.find((t) => t.id === 7);
       const table7Data = table7?.data || TABLE_7_DATA;
 
@@ -620,7 +637,8 @@ export default function App() {
       );
 
       // Combination Badge on banner
-      const badgeText = comboInput ? `Kombinasiya #${comboInput} / 1024` : '10 Sütun';
+      const activeCombo = overrideComboNum !== undefined ? String(overrideComboNum) : comboInput;
+      const badgeText = activeCombo ? `Kombinasiya #${activeCombo} / 1024` : '10 Sütun';
       ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
       const badgeMetrics = ctx.measureText(badgeText);
       const badgeW = badgeMetrics.width + 24;
@@ -649,7 +667,7 @@ export default function App() {
       ctx.fillStyle = '#cbd5e1';
       ctx.fillRect(tableX, tableY + tableHeaderHeight - 1, cardWidth, 1);
 
-      // Sətir \\ Sütun header
+      // Sətir \ Sütun header
       ctx.textAlign = 'center';
       ctx.fillStyle = '#475569';
       ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
@@ -833,6 +851,99 @@ export default function App() {
     }
   };
 
+  const cancelBatchGeneration = () => {
+    cancelBatchRef.current = true;
+    setIsBatchGenerating(false);
+    setShowBatchModal(false);
+    setImageNotification('Toplu yükləmə dayandırıldı.');
+    setTimeout(() => setImageNotification(null), 3000);
+  };
+
+  const exportAll1024Table7Images = async () => {
+    if (isBatchGenerating) return;
+
+    cancelBatchRef.current = false;
+    setIsBatchGenerating(true);
+    setShowBatchModal(true);
+    setBatchProgress({ current: 0, total: 1024, percent: 0 });
+
+    try {
+      const zip = new JSZip();
+      const folder = zip.folder('Cedvel_7_Butun_1024_Kombinasiyalar') || zip;
+
+      // Hər kombinasiya üçün cədvəl 7 təsvirini ardıcıl emal edirik
+      // Brauzerin donmaması üçün hər 20 şəkildən bir kiçik fasilə (timeout 0) veririk
+      for (let comboNum = 1; comboNum <= 1024; comboNum++) {
+        if (cancelBatchRef.current) {
+          return;
+        }
+
+        // 1) Həmin kombinasiyaya uyğun 1-ci cədvəlin sətirlərini hesabla
+        const r0 = getRowFromCombinationNumber(comboNum);
+        const r1 = computeSecondRowFromFirstRow(r0);
+        // 2) 4-cü və 5-ci cədvəlləri hesabla
+        const t4 = computeTable4([r0, r1]);
+        const t5 = computeTable5(t4);
+
+        // 3) Cədvəl 7-nin həmin kombinasiyası üçün PNG Blob generasiya et
+        const { blob } = await generateTable7ImageBlob(comboNum, t5);
+
+        // 4) Zip qovluğuna əlavə et (məs: komb_0001.png ... komb_1024.png)
+        const paddedNum = String(comboNum).padStart(4, '0');
+        const fileName = `cedvel_7_kombinasiya_${paddedNum}.png`;
+        folder.file(fileName, blob);
+
+        // Progress yenilə
+        const percent = Math.floor((comboNum / 1024) * 100);
+        setBatchProgress({
+          current: comboNum,
+          total: 1024,
+          percent,
+        });
+
+        // Event loop üçün nəfəs veririk ki, UI donmasın və faiz səlis yenilənsin
+        if (comboNum % 15 === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+      }
+
+      if (cancelBatchRef.current) return;
+
+      // Zip arxivini yarat
+      setBatchProgress((prev) => ({ ...prev, percent: 100 }));
+      const zipBlob = await zip.generateAsync(
+        {
+          type: 'blob',
+          compression: 'DEFLATE',
+          compressionOptions: { level: 4 }, // Balanslaşdırılmış sürətli sıxılma
+        },
+        (metadata) => {
+          // Zip faylının sıxılma faizi
+          setBatchProgress({
+            current: 1024,
+            total: 1024,
+            percent: Math.floor(metadata.percent),
+          });
+        }
+      );
+
+      if (cancelBatchRef.current) return;
+
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const zipFileName = `Cedvel_7_1024_Kombinasiya_PNG_${dateStr}.zip`;
+      saveAs(zipBlob, zipFileName);
+
+      setImageNotification('1024 ədəd Cədvəl 7 PNG şəkli ZIP arxivi kimi uğurla yükləndi!');
+      setShowBatchModal(false);
+    } catch (err) {
+      console.error('Batch generation error', err);
+      setImageNotification('1024 şəkil hazırlanarkən xəta baş verdi');
+    } finally {
+      setIsBatchGenerating(false);
+      setTimeout(() => setImageNotification(null), 5000);
+    }
+  };
+
   const handleManualShare = async () => {
     if (!imagePreviewUrl) return;
     try {
@@ -889,7 +1000,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f3f4f6] text-neutral-800 antialiased font-sans pb-16 overflow-x-hidden w-full">
+    <div className="min-h-screen bg-[#f3f4f6] text-neutral-800 antialiased font-sans pb-16 w-full">
       {/* Top Header bar styled like Excel */}
       <header className="bg-[#107c41] text-white px-3 sm:px-6 py-3 sm:py-4 shadow-sm border-b border-[#0d6535]">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -1238,16 +1349,34 @@ export default function App() {
                       </button>
                     )}
                     {table.id === 7 ? (
-                      <button
-                        type="button"
-                        onClick={exportTable7AsImage}
-                        disabled={isGeneratingImage}
-                        className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 border border-emerald-700 rounded-md sm:rounded shadow-xs transition-all shrink-0 hover:scale-[1.02]"
-                        title="Şəkil kimi telefonun galeriyasına yüklə"
-                      >
-                        <ImageIcon className="w-3.5 h-3.5 shrink-0" />
-                        <span>{isGeneratingImage ? 'Hazırlanır...' : 'Şəkil Yüklə'}</span>
-                      </button>
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                        <button
+                          type="button"
+                          onClick={exportTable7AsImage}
+                          disabled={isGeneratingImage || isBatchGenerating}
+                          className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 border border-emerald-700 rounded-md sm:rounded shadow-xs transition-all shrink-0 hover:scale-[1.02] disabled:opacity-50"
+                          title="Hazırkı kombinasiyanı şəkil kimi yüklə"
+                        >
+                          <ImageIcon className="w-3.5 h-3.5 shrink-0" />
+                          <span>{isGeneratingImage ? 'Hazırlanır...' : 'Şəkil Yüklə'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={exportAll1024Table7Images}
+                          disabled={isGeneratingImage || isBatchGenerating}
+                          className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs font-bold text-amber-950 bg-amber-400 hover:bg-amber-300 active:bg-amber-500 border border-amber-500 rounded-md sm:rounded shadow-xs transition-all shrink-0 hover:scale-[1.02] disabled:opacity-50"
+                          title="Bütün 1024 kombinasiyanı PNG formatında ZIP arxivi kimi bir kliklə yüklə"
+                        >
+                          {isBatchGenerating ? (
+                            <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin text-amber-950" />
+                          ) : (
+                            <Archive className="w-3.5 h-3.5 shrink-0" />
+                          )}
+                          <span>
+                            {isBatchGenerating ? `${batchProgress.percent}%` : 'Bütün 1024 PNG Yüklə (ZIP)'}
+                          </span>
+                        </button>
+                      </div>
                     ) : (
                       <button
                         type="button"
@@ -1623,19 +1752,36 @@ export default function App() {
                 {/* Dedicated Mobile Action Bar for Table 7 */}
                 {table.id === 7 && (
                   <div className="sm:hidden px-3 py-2 bg-emerald-50/80 border-t border-emerald-200/80 flex items-center justify-between gap-2">
-                    <span className="text-[11px] font-semibold text-emerald-950 flex items-center gap-1.5">
+                    <span className="text-[11px] font-semibold text-emerald-950 flex items-center gap-1.5 truncate">
                       <Smartphone className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                       Cədvəl 7 Nəticəsi
                     </span>
-                    <button
-                      type="button"
-                      onClick={exportTable7AsImage}
-                      disabled={isGeneratingImage}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 rounded-md shadow-xs transition-all shrink-0"
-                    >
-                      <ImageIcon className="w-3.5 h-3.5 shrink-0" />
-                      <span>{isGeneratingImage ? 'Hazırlanır...' : 'Şəkil Yüklə'}</span>
-                    </button>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={exportTable7AsImage}
+                        disabled={isGeneratingImage || isBatchGenerating}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 rounded-md shadow-xs transition-all shrink-0 disabled:opacity-50"
+                        title="Hazırkı şəkli yüklə"
+                      >
+                        <ImageIcon className="w-3.5 h-3.5 shrink-0" />
+                        <span>{isGeneratingImage ? '...' : 'Şəkil Yüklə'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={exportAll1024Table7Images}
+                        disabled={isGeneratingImage || isBatchGenerating}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-amber-950 bg-amber-400 hover:bg-amber-300 active:bg-amber-500 rounded-md shadow-xs transition-all shrink-0 disabled:opacity-50"
+                        title="Bütün 1024 kombinasiyanı ZIP kimi yüklə"
+                      >
+                        {isBatchGenerating ? (
+                          <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin text-amber-950" />
+                        ) : (
+                          <Archive className="w-3.5 h-3.5 shrink-0" />
+                        )}
+                        <span>{isBatchGenerating ? `${batchProgress.percent}%` : '1024 PNG'}</span>
+                      </button>
+                    </div>
                   </div>
                 )}
               </section>
@@ -1723,6 +1869,79 @@ export default function App() {
                   Bağla
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Generation (1024 PNG) Progress Modal */}
+      {showBatchModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-neutral-200">
+            {/* Modal Header */}
+            <div className="px-5 py-4 bg-gradient-to-r from-amber-500 to-amber-600 text-amber-950 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-white/20 rounded-lg">
+                  <Archive className="w-5 h-5 text-amber-950" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm sm:text-base leading-tight">
+                    1024 PNG Toplu Paketləmə
+                  </h3>
+                  <p className="text-[11px] text-amber-900 font-medium">
+                    Bütün kombinasiyalar bir ZIP arxivində
+                  </p>
+                </div>
+              </div>
+              {isBatchGenerating && (
+                <Loader2 className="w-5 h-5 animate-spin text-amber-950" />
+              )}
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 sm:p-6 space-y-4">
+              <div className="flex items-baseline justify-between">
+                <span className="text-xs font-semibold text-neutral-600">
+                  Generasiya olunan şəkillər:
+                </span>
+                <span className="text-sm font-bold text-neutral-900 font-mono">
+                  {batchProgress.current} / {batchProgress.total} ({batchProgress.percent}%)
+                </span>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="w-full bg-neutral-200 rounded-full h-3.5 overflow-hidden p-0.5 border border-neutral-300">
+                <div
+                  className="bg-gradient-to-r from-amber-400 via-amber-500 to-emerald-500 h-full rounded-full transition-all duration-150 ease-out"
+                  style={{ width: `${Math.max(2, batchProgress.percent)}%` }}
+                />
+              </div>
+
+              {/* Status explanation */}
+              <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-3 text-[11px] text-amber-950 space-y-1">
+                <p className="font-semibold flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  1-dən 1024-ə qədər bütün Cədvəl 7 şəkilləri hazırlanır
+                </p>
+                <p className="text-amber-800 leading-relaxed">
+                  Hər bir şəkil dəqiq ölçülü, yüksək keyfiyyətli PNG formatında hasil edilir və ZIP faylında saxlanılır. Proses bitdikdə ZIP faylı avtomatik yüklənəcək.
+                </p>
+              </div>
+
+              <div className="text-[11px] text-neutral-500 text-center">
+                Zəhmət olmasa proses başa çatana qədər səhifəni yeniləməyin.
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="px-5 py-3 bg-neutral-50 border-t border-neutral-200 flex items-center justify-end">
+              <button
+                type="button"
+                onClick={cancelBatchGeneration}
+                className="px-4 py-2 text-xs font-bold text-neutral-700 hover:text-red-700 bg-white hover:bg-red-50 border border-neutral-300 hover:border-red-300 rounded-lg transition-colors"
+              >
+                Dayandır / Ləğv et
+              </button>
             </div>
           </div>
         </div>
